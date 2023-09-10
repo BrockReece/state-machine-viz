@@ -1,0 +1,152 @@
+<body>
+  <iframe data-xstate width="100%" height="100%"></iframe>
+</body>
+
+<script>
+    const { inspect } = XStateInspect;
+    const { interpret, createMachine } = XState; // global variable: window.XState
+
+    inspect({
+      iframe: () => document.querySelector("iframe[data-xstate]"),
+      // url: 'https://xstate.js.org/viz/'
+    })
+
+    const djangoFSM = {
+        "id": "recurring",
+        "name": "task_recurring",
+        "states": ["published", "paused", "expired", "completed"],
+        "transitions": [
+            {
+                "trigger": "pause_all",
+                "source": ["published", "paused"],
+                "dest": "paused",
+                "conditions": [],
+                "meta": {
+                    "allowed_by": ["owner", "watcher"],
+                    "link_items": {
+                        "scope": "schedule_editor",
+                        "form": []
+                    }
+                }
+            },
+            {
+                "trigger": "unpause_all",
+                "source": ["published", "paused"],
+                "dest": "published",
+                "conditions": [],
+                "meta": {
+                    "allowed_by": ["owner", "watcher"],
+                    "link_items": {
+                        "scope": "schedule_editor",
+                        "form": []
+                    }
+                }
+            },
+            {
+                "trigger": "expire",
+                "source": ["published", "paused"],
+                "dest": "expired",
+                "conditions": [],
+                "meta": {
+                    "allowed_by": ["owner", "watcher"],
+                    "link_items": {
+                        "scope": "task_management",
+                        "form": []
+                    }
+                }
+            },
+            {
+                "trigger": "cancel",
+                "source": ["published", "paused"],
+                "dest": "completed",
+                "conditions": [],
+                "meta": {
+                    "allowed_by": ["owner", "watcher"],
+                    "link_items": {
+                        "scope": "task_management",
+                        "form": []
+                    }
+                }
+            },
+            {
+                "trigger": "extend",
+                "source": ["expired"],
+                "dest": "published",
+                "conditions": [],
+                "meta": {
+                    "allowed_by": ["owner", "watcher"],
+                    "link_items": {
+                        "scope": "task_management",
+                        "form": []
+                    }
+                }
+            },
+            {
+                "trigger": "complete",
+                "source": ["expired"],
+                "dest": "completed",
+                "conditions": [],
+                "meta": {
+                    "allowed_by": ["owner", "watcher"],
+                    "link_items": {
+                        "scope": "task_management",
+                        "form": []
+                    }
+                }
+            },
+            {
+                "trigger": "client_offboarded",
+                "source": ["published", "paused"],
+                "dest": "completed",
+                "conditions": [],
+                "unless": [],
+                "meta": {
+                    "is_public": false
+                }
+            },
+            {
+                "trigger": "reopen",
+                "source": ["completed"],
+                "dest": "published",
+                "conditions": [],
+                "meta": {
+                    "allowed_by": ["owner", "watcher"],
+                    "link_items": {
+                        "scope": "task_management",
+                        "form": []
+                    }
+                }
+            }
+        ]
+    }
+
+    const lightMachine = createMachine({
+      id: 'light',
+      initial: 'published',
+      context: {
+        role: 'owner'
+      },
+      states: djangoFSM.states.reduce((agg, state) => {
+        agg[state] = {
+            on: djangoFSM.transitions.filter((t) => t.source.includes(state)).reduce((tAgg, transition) => {
+                tAgg[transition.trigger] = {
+                  target: transition.dest
+                }
+
+                return tAgg
+            }, {}),
+        }
+        
+        return agg
+      }, {}),
+      
+    });
+
+    const lightService = interpret(lightMachine, { devTools: true, guards: {
+        allowedBy: (context, event, { cond }) => { 
+          console.log(cond)
+          return cond.roles.includes(context.roles)
+        }
+      } }).start({});
+    console.log(lightMachine, lightService)
+</script>
